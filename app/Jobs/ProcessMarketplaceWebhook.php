@@ -2,6 +2,8 @@
 
 namespace App\Jobs;
 
+use App\Actions\ApplyMarketplaceOrder;
+use App\Actions\RebuildOrderStatusHistory;
 use App\Enums\MarketplaceEventType;
 use App\Models\WebhookEvent;
 use App\Validation\MarketplaceOrderValidator;
@@ -15,16 +17,17 @@ class ProcessMarketplaceWebhook implements ShouldQueue
 {
     use Queueable;
 
-    public function __construct(public int $eventId)
-    {
-    }
+    public function __construct(public int $eventId) {}
 
-    public function handle(MarketplaceOrderValidator $validator): void
-    {
-        DB::transaction(function () use ($validator): void {
+    public function handle(
+        MarketplaceOrderValidator $validator,
+        ApplyMarketplaceOrder $apply,
+        RebuildOrderStatusHistory $history,
+    ): void {
+        DB::transaction(function () use ($validator, $apply, $history): void {
             $event = WebhookEvent::query()->lockForUpdate()->findOrFail($this->eventId);
 
-            if (!in_array($event->status, [WebhookEvent::STATUS_PENDING, WebhookEvent::STATUS_FAILED], true)) {
+            if (! in_array($event->status, [WebhookEvent::STATUS_PENDING, WebhookEvent::STATUS_FAILED], true)) {
                 return;
             }
 
@@ -50,8 +53,8 @@ class ProcessMarketplaceWebhook implements ShouldQueue
                 return;
             }
 
-            $event->status = WebhookEvent::STATUS_VALIDATED;
-            $event->save();
+            $order = $apply->handle($event, $payload['data']['order']);
+            $history->handle($order);
         });
     }
 
