@@ -58,10 +58,4 @@ class Order extends Model
     {
         return $this->hasMany(OrderStatusHistory::class)->orderBy('occurred_at')->orderBy('id');
     }
-
-    /** @return HasMany<WebhookEvent, $this> */
-    public function webhookEvents(): HasMany
-    {
-        return $this->hasMany(WebhookEvent::class);
-    }
 }
