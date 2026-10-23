@@ -10,7 +10,10 @@ use Illuminate\Validation\Rules\Enum as EnumRule;
 
 class MarketplaceOrderValidator
 {
-    private const AMOUNT_PATTERN = '/\A-?\d+\.\d{2}\z/';
+    // decimal(18, 2): up to 16 integer digits; leading zeros do not affect the range.
+    private const AMOUNT_PATTERN = '/\A-?0*[0-9]{1,16}\.[0-9]{2}\z/';
+
+    private const POSTGRES_INTEGER_MAX = 2147483647;
 
     private const CURRENCY_CODE_PATTERN = '/\A[A-Z]{3}\z/';
 
@@ -21,7 +24,7 @@ class MarketplaceOrderValidator
 
     private function rules(array $payload): array
     {
-        $amount = ['required', 'string', 'regex:' . self::AMOUNT_PATTERN];
+        $amount = ['required', 'string', 'regex:'.self::AMOUNT_PATTERN];
         $hasShipment = data_get($payload, 'data.order.shipment') !== null;
 
         return [
@@ -29,7 +32,7 @@ class MarketplaceOrderValidator
             'data.order.id' => ['required', 'string'],
             'data.order.number' => ['required', 'string'],
             'data.order.status' => ['required', Rule::enum(OrderStatus::class)],
-            'data.order.currency' => ['required', 'string', 'regex:' . self::CURRENCY_CODE_PATTERN],
+            'data.order.currency' => ['required', 'string', 'regex:'.self::CURRENCY_CODE_PATTERN],
             'data.order.customer' => ['required', 'array'],
             'data.order.customer.email' => ['required', 'string', 'email:rfc'],
             'data.order.customer.name' => ['required', 'string'],
@@ -38,7 +41,7 @@ class MarketplaceOrderValidator
             'data.order.items.*' => ['required', 'array'],
             'data.order.items.*.sku' => ['required', 'string'],
             'data.order.items.*.name' => ['required', 'string'],
-            'data.order.items.*.quantity' => ['required', 'integer:strict', 'min:1'],
+            'data.order.items.*.quantity' => ['required', 'integer:strict', 'min:1', 'max:'.self::POSTGRES_INTEGER_MAX],
             'data.order.items.*.price' => $amount,
             'data.order.delivery_price' => $amount,
             'data.order.discount' => $amount,
@@ -65,11 +68,12 @@ class MarketplaceOrderValidator
             'list' => 'The :attribute field must be a JSON array with consecutive indexes.',
             'integer' => 'The :attribute field must be an integer JSON number, not a string.',
             'email' => 'The :attribute field must contain a valid email address.',
-            'data.order.status.' . EnumRule::class => 'The order status must be one of: ' . implode(', ', array_column(OrderStatus::cases(), 'value')) . '.',
+            'data.order.status.'.EnumRule::class => 'The order status must be one of: '.implode(', ', array_column(OrderStatus::cases(), 'value')).'.',
             'data.order.currency.regex' => 'The currency code must contain exactly three uppercase letters.',
             'data.order.items.min' => 'The order must contain at least one item.',
             'data.order.items.*.quantity.min' => 'The item quantity must be at least :min.',
-            'regex' => 'The :attribute field must be a decimal string with exactly two digits after the decimal point.',
+            'data.order.items.*.quantity.max' => 'The item quantity must not exceed :max.',
+            'regex' => 'The :attribute field must be a decimal string with exactly two fractional digits and at most 16 integer digits, excluding leading zeros.',
             'data.order.shipment.tracking_url.url' => 'The tracking URL must be a valid HTTP or HTTPS URL.',
         ];
     }
