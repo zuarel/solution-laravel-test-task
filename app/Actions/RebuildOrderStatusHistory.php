@@ -41,19 +41,19 @@ class RebuildOrderStatusHistory
         $previousStatus = null;
         $rows = [];
 
-        foreach ($statusEntries as $observation) {
-            if ($observation['status'] === $previousStatus) {
+        foreach ($statusEntries as $statusRecord) {
+            if ($statusRecord['status'] === $previousStatus) {
                 continue;
             }
 
             $rows[] = [
                 'order_id' => $order->id,
-                'webhook_event_id' => $observation['event_id'],
-                'status' => $observation['status']->value,
-                'occurred_at' => $observation['at']->format(DateTimeFormat::DATABASE),
+                'webhook_event_id' => $statusRecord['event_id'],
+                'status' => $statusRecord['status']->value,
+                'occurred_at' => $statusRecord['at']->format(DateTimeFormat::DATABASE),
             ];
 
-            $previousStatus = $observation['status'];
+            $previousStatus = $statusRecord['status'];
         }
 
         OrderStatusHistory::query()->insert($rows);
