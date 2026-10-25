@@ -9,3 +9,4 @@ Route::post('/webhooks/marketplace', MarketplaceWebhookController::class)
     ->middleware(VerifyMarketplaceWebhook::class);
 
 Route::get('/orders', [OrderController::class, 'list']);
+Route::get('/orders/{id}', [OrderController::class, 'show']);

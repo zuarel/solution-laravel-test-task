@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\GetOrderDetails;
 use App\Http\Requests\ListOrdersRequest;
 use App\Http\Resources\OrderListResource;
+use App\Http\Resources\OrderResource;
 use App\Models\Order;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
@@ -26,5 +28,10 @@ class OrderController extends Controller
             ->withQueryString();
 
         return OrderListResource::collection($orders);
+    }
+
+    public function show(string $id, GetOrderDetails $action): OrderResource
+    {
+        return OrderResource::make($action->handle($id));
     }
 }
