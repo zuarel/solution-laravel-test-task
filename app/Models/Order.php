@@ -3,6 +3,8 @@
 namespace App\Models;
 
 use App\Enums\OrderStatus;
+use Illuminate\Database\Eloquent\Attributes\Scope;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
@@ -45,6 +47,16 @@ class Order extends Model
             'created_at' => 'immutable_datetime',
             'updated_at' => 'immutable_datetime',
         ];
+    }
+
+    #[Scope]
+    protected function forEmail(Builder $query, ?string $email): Builder
+    {
+        if ($email === null) {
+            return $query;
+        }
+
+        return $query->whereRaw('LOWER(customer_email) = LOWER(?)', [$email]);
     }
 
     /** @return HasMany<OrderItem, $this> */
