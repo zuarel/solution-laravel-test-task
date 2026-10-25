@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Actions\EnqueueWebhookEvent;
 use App\Http\Requests\MarketplaceWebhookRequest;
 use App\Models\WebhookEvent;
+use App\Support\DateTimeFormat;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\DB;
 
@@ -21,7 +22,7 @@ class MarketplaceWebhookController extends Controller
                     'type' => $event['type'],
                     'raw_body' => $request->getContent(),
                     'status' => WebhookEvent::STATUS_PENDING,
-                    'received_at' => now()->format('Y-m-d H:i:s.u'),
+                    'received_at' => now()->format(DateTimeFormat::DATABASE),
                 ],
                 returning: ['id'],
                 uniqueBy: ['event_id'],

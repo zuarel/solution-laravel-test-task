@@ -4,13 +4,14 @@ namespace App\Models;
 
 use App\Enums\OrderNotificationStatus;
 use App\Enums\OrderStatus;
+use App\Support\DateTimeFormat;
 use Illuminate\Database\Eloquent\Model;
 
 class OrderNotification extends Model
 {
     public $timestamps = false;
 
-    protected $dateFormat = 'Y-m-d H:i:s.uP';
+    protected $dateFormat = DateTimeFormat::DATABASE;
 
     protected $fillable = [
         'order_id', 'type', 'status', 'attempted_at', 'sent_at', 'last_error',

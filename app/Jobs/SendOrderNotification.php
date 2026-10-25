@@ -7,6 +7,7 @@ use App\Enums\OrderStatus;
 use App\Mail\OrderStatusChanged;
 use App\Models\Order;
 use App\Models\OrderNotification;
+use App\Support\DateTimeFormat;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\DB;
@@ -35,7 +36,7 @@ class SendOrderNotification implements ShouldQueue
                 ->where('status', OrderNotificationStatus::Sending)
                 ->update([
                     'status' => OrderNotificationStatus::Sent->value,
-                    'sent_at' => now()->format('Y-m-d H:i:s.uP'),
+                    'sent_at' => now()->format(DateTimeFormat::DATABASE),
                 ]);
         } catch (Throwable $exception) {
             OrderNotification::query()

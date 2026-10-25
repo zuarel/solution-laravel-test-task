@@ -6,6 +6,7 @@ use App\Enums\OrderStatus;
 use App\Models\Order;
 use App\Models\OrderStatusHistory;
 use App\Models\WebhookEvent;
+use App\Support\DateTimeFormat;
 use DateTimeImmutable;
 use DateTimeZone;
 
@@ -49,7 +50,7 @@ class RebuildOrderStatusHistory
                 'order_id' => $order->id,
                 'webhook_event_id' => $observation['event_id'],
                 'status' => $observation['status']->value,
-                'occurred_at' => $observation['at']->format('Y-m-d H:i:s.uP'),
+                'occurred_at' => $observation['at']->format(DateTimeFormat::DATABASE),
             ];
 
             $previousStatus = $observation['status'];

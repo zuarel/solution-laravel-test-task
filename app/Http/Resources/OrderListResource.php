@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Models\Order;
+use App\Support\ApiDateTime;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -21,8 +22,8 @@ class OrderListResource extends JsonResource
             ],
             'total' => $this->total,
             'currency' => $this->currency,
-            'created_at' => $this->marketplace_created_at->format('Y-m-d\TH:i:s.uP'),
-            'updated_at' => $this->marketplace_updated_at->format('Y-m-d\TH:i:s.uP'),
+            'created_at' => ApiDateTime::format($this->marketplace_created_at),
+            'updated_at' => ApiDateTime::format($this->marketplace_updated_at),
         ];
     }
 }

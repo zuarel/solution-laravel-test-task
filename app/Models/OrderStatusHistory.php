@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\OrderStatus;
+use App\Support\DateTimeFormat;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -12,7 +13,7 @@ class OrderStatusHistory extends Model
 
     protected $table = 'order_status_history';
 
-    protected $dateFormat = 'Y-m-d H:i:s.uP';
+    protected $dateFormat = DateTimeFormat::DATABASE;
 
     protected $fillable = [
         'order_id',

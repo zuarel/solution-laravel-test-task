@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\OrderStatus;
+use App\Support\DateTimeFormat;
 use Illuminate\Database\Eloquent\Attributes\Scope;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -10,7 +11,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Order extends Model
 {
-    protected $dateFormat = 'Y-m-d H:i:s.uP';
+    protected $dateFormat = DateTimeFormat::DATABASE;
 
     protected $fillable = [
         'marketplace_id',

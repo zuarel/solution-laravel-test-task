@@ -2,6 +2,7 @@
 
 namespace App\Rules;
 
+use App\Support\DateTimeFormat;
 use Closure;
 use DateTimeImmutable;
 use Illuminate\Contracts\Validation\ValidationRule;
@@ -19,8 +20,8 @@ class Iso8601DateTime implements ValidationRule
         }
 
         $format = str_contains($value, '.')
-            ? 'Y-m-d\TH:i:s.uP'
-            : 'Y-m-d\TH:i:sP';
+            ? DateTimeFormat::ISO_8601_WITH_MICROSECONDS
+            : DateTimeFormat::ISO_8601;
 
         $date = DateTimeImmutable::createFromFormat($format, $value);
         $errors = DateTimeImmutable::getLastErrors();

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\DateTimeFormat;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -21,7 +22,7 @@ class WebhookEvent extends Model
 
     public $timestamps = false;
 
-    protected $dateFormat = 'Y-m-d H:i:s.u';
+    protected $dateFormat = DateTimeFormat::DATABASE;
 
     protected $fillable = [
         'event_id',
