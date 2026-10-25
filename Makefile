@@ -6,7 +6,7 @@ SERVICES ?= app queue
 ARGS ?=
 FILTER ?=
 
-.PHONY: help setup up down stop restart build ps logs shell artisan composer migrate test test-webhook lint format queue-restart
+.PHONY: help setup up down stop restart build ps logs shell artisan composer migrate test test-webhook pint lint format queue-restart
 
 help: ## Показать доступные команды
 	@awk 'BEGIN {FS = ":.*## "} /^[a-zA-Z_-]+:.*## / {printf "  %-18s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -56,8 +56,10 @@ test-webhook: ## Запустить тесты приёма вебхуков
 lint: ## Проверить форматирование PHP
 	$(APP_EXEC) vendor/bin/pint --test $(ARGS)
 
-format: ## Исправить форматирование PHP
+pint: ## Запустить Laravel Pint; ARGS="--test" для проверки
 	$(APP_EXEC) vendor/bin/pint $(ARGS)
+
+format: pint ## Исправить форматирование PHP
 
 queue-restart: ## Перезапустить воркер очереди
 	$(COMPOSE) restart queue
