@@ -48,24 +48,24 @@ class VerifyMarketplaceWebhook
         $timestamp = $request->header('X-Webhook-Timestamp');
         $signature = $request->header('X-Webhook-Signature');
 
-        if (!is_string($eventId) || trim($eventId) === '') {
+        if (! is_string($eventId) || trim($eventId) === '') {
             abort(Response::HTTP_BAD_REQUEST, 'Missing X-Webhook-Id.');
         }
 
-        if (!is_string($timestamp)
-            || !preg_match(self::TIMESTAMP_PATTERN, $timestamp)
+        if (! is_string($timestamp)
+            || ! preg_match(self::TIMESTAMP_PATTERN, $timestamp)
             || filter_var($timestamp, FILTER_VALIDATE_INT) === false) {
             abort(Response::HTTP_BAD_REQUEST, 'Invalid X-Webhook-Timestamp.');
         }
 
-        if (!is_string($signature) || !preg_match(self::SIGNATURE_PATTERN, $signature)) {
+        if (! is_string($signature) || ! preg_match(self::SIGNATURE_PATTERN, $signature)) {
             abort(Response::HTTP_BAD_REQUEST, 'Invalid X-Webhook-Signature.');
         }
     }
 
     private function validateTimestamp(Request $request): void
     {
-        $timestamp = (int)$request->header('X-Webhook-Timestamp');
+        $timestamp = (int) $request->header('X-Webhook-Timestamp');
         $difference = abs(now()->getTimestamp() - $timestamp);
 
         if ($difference > self::TIMESTAMP_TOLERANCE_SECONDS) {
@@ -77,16 +77,16 @@ class VerifyMarketplaceWebhook
     {
         $secret = config('marketplace.webhook_secret');
 
-        if (!is_string($secret) || $secret === '') {
+        if (! is_string($secret) || $secret === '') {
             abort(Response::HTTP_SERVICE_UNAVAILABLE, 'Webhook verification is not configured.');
         }
 
         $timestamp = $request->header('X-Webhook-Timestamp');
         $signature = $request->header('X-Webhook-Signature');
-        $signedContent = $timestamp . '.' . $request->getContent();
-        $expectedSignature = 'sha256=' . hash_hmac('sha256', $signedContent, $secret);
+        $signedContent = $timestamp.'.'.$request->getContent();
+        $expectedSignature = 'sha256='.hash_hmac('sha256', $signedContent, $secret);
 
-        if (!hash_equals($expectedSignature, $signature)) {
+        if (! hash_equals($expectedSignature, $signature)) {
             abort(Response::HTTP_UNAUTHORIZED, 'Invalid webhook signature.');
         }
     }

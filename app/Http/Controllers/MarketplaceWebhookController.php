@@ -29,7 +29,7 @@ class MarketplaceWebhookController extends Controller
             )->first()?->id;
 
             if ($eventId !== null) {
-                $enqueue->handle((int)$eventId);
+                $enqueue->handle((int) $eventId);
             }
         }, attempts: 3);
 

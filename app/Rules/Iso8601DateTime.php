@@ -13,7 +13,7 @@ class Iso8601DateTime implements ValidationRule
 
     public function validate(string $attribute, mixed $value, Closure $fail): void
     {
-        if (!is_string($value) || !preg_match(self::DATETIME_PATTERN, $value)) {
+        if (! is_string($value) || ! preg_match(self::DATETIME_PATTERN, $value)) {
             $fail('The :attribute must be an ISO 8601 datetime with a timezone.');
 
             return;
