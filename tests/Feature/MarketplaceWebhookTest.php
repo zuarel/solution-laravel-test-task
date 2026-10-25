@@ -2,16 +2,26 @@
 
 namespace Tests\Feature;
 
+use App\Jobs\ProcessMarketplaceWebhook;
+use App\Models\WebhookEvent;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Response;
+use Illuminate\Queue\QueueManager;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Testing\TestResponse;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class MarketplaceWebhookTest extends TestCase
 {
+    use RefreshDatabase;
+
     private const SECRET = 'webhook-test-secret';
+
+    private QueueManager $queueManager;
 
     protected function setUp(): void
     {
@@ -20,6 +30,7 @@ class MarketplaceWebhookTest extends TestCase
         config(['marketplace.webhook_secret' => self::SECRET]);
         $this->freezeTime();
         Mail::fake();
+        $this->queueManager = $this->app['queue'];
         Queue::fake();
     }
 
@@ -31,19 +42,74 @@ class MarketplaceWebhookTest extends TestCase
     }
 
     #[DataProvider('examples')]
-    public function test_accepts_documented_examples_without_side_effects(string $example): void
+    public function test_saves_documented_examples_and_queues_one_job(string $example): void
     {
-        $queries = [];
-        $this->app['db']->listen(function ($query) use (&$queries): void {
-            $queries[] = $query->sql;
+        $body = file_get_contents(base_path("task/examples/{$example}.json"));
+        $payload = json_decode($body, true);
+
+        $this->sendWebhook($body)->assertOk()->assertContent('OK');
+
+        $event = WebhookEvent::query()->sole();
+        $this->assertSame($payload['id'], $event->event_id);
+        $this->assertSame($payload['type'], $event->type);
+        $this->assertSame($body, $event->raw_body);
+        $this->assertSame(WebhookEvent::STATUS_PENDING, $event->status);
+        $this->assertEquals(now(), $event->received_at);
+        $this->assertEquals(now(), $event->queued_at);
+        Mail::assertNothingOutgoing();
+        Queue::assertPushed(ProcessMarketplaceWebhook::class, fn ($job) => $job->eventId === $event->id && $job->connection === 'database');
+        Queue::assertPushed(ProcessMarketplaceWebhook::class, 1);
+    }
+
+    public function test_duplicate_delivery_does_not_overwrite_original_event(): void
+    {
+        $payload = $this->event();
+        $body = json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)."\n";
+        $this->sendWebhook($body)->assertOk();
+        $stored = WebhookEvent::query()->sole();
+
+        $this->travel(1)->minutes();
+        $this->sendWebhook($body)->assertOk();
+
+        $payload['type'] = 'order.future-event';
+        $payload['data']['order'] = ['changed' => true];
+        $this->sendWebhook(json_encode($payload))->assertOk();
+
+        $this->assertDatabaseCount('webhook_events', 1);
+        $this->assertSame($body, $stored->fresh()->raw_body);
+        $this->assertSame('order.created', $stored->fresh()->type);
+        $this->assertEquals($stored->received_at, $stored->fresh()->received_at);
+        Queue::assertPushed(ProcessMarketplaceWebhook::class, 1);
+    }
+
+    public function test_does_not_acknowledge_event_when_saving_fails(): void
+    {
+        DB::connection()->beforeExecuting(function (string $query): void {
+            if (str_starts_with(strtolower($query), 'insert into "webhook_events"')) {
+                throw new \RuntimeException('Storage failure');
+            }
         });
 
-        $this->sendWebhook(file_get_contents(base_path("task/examples/{$example}.json")))
-            ->assertOk()->assertContent('OK');
+        $this->sendWebhook(json_encode($this->event()))->assertServerError();
 
-        $this->assertSame([], $queries);
-        Mail::assertNothingOutgoing();
+        $this->assertDatabaseCount('webhook_events', 0);
         Queue::assertNothingPushed();
+    }
+
+    public function test_other_unique_conflicts_are_not_acknowledged_as_duplicates(): void
+    {
+        Schema::table('webhook_events', function ($table): void {
+            $table->unique('type');
+        });
+
+        $payload = $this->event();
+        $this->sendWebhook(json_encode($payload))->assertOk();
+
+        $payload['id'] = 'evt_other_event_same_type';
+        $this->sendWebhook(json_encode($payload))->assertServerError();
+
+        $this->assertDatabaseCount('webhook_events', 1);
+        Queue::assertPushed(ProcessMarketplaceWebhook::class, 1);
     }
 
     public function test_accepts_order_without_detailed_validation(): void
@@ -52,7 +118,57 @@ class MarketplaceWebhookTest extends TestCase
         $event['data']['order'] = [];
 
         $this->sendWebhook(json_encode($event))->assertOk();
-        Queue::assertNothingPushed();
+        Queue::assertPushed(ProcessMarketplaceWebhook::class, 1);
+    }
+
+    public function test_event_and_job_are_saved_before_worker_runs(): void
+    {
+        Queue::swap($this->queueManager);
+        $this->sendWebhook(json_encode($this->event()))->assertOk();
+
+        $event = WebhookEvent::query()->sole();
+        $this->assertNotNull($event->queued_at);
+        $this->assertDatabaseCount('jobs', 1);
+
+        $job = $this->queueManager->connection('database')->pop();
+        $this->assertNotNull($job);
+        $job->fire();
+        $job->delete();
+
+        $this->assertDatabaseCount('jobs', 0);
+        $this->assertSame(WebhookEvent::STATUS_PROCESSED, $event->fresh()->status);
+        Mail::assertNothingOutgoing();
+    }
+
+    public function test_event_is_rolled_back_when_queue_insert_fails(): void
+    {
+        Queue::swap($this->queueManager);
+        config(['queue.connections.database.table' => 'missing_jobs_table']);
+
+        $this->sendWebhook(json_encode($this->event()))->assertServerError();
+
+        $this->assertDatabaseCount('webhook_events', 0);
+        $this->assertDatabaseCount('jobs', 0);
+    }
+
+    public function test_invalid_order_is_acknowledged_before_worker_records_validation_errors(): void
+    {
+        Queue::swap($this->queueManager);
+        $payload = $this->event();
+        $payload['data']['order']['customer']['email'] = 'invalid-email';
+
+        $this->sendWebhook(json_encode($payload))->assertOk();
+        $event = WebhookEvent::query()->sole();
+        $this->assertSame(WebhookEvent::STATUS_PENDING, $event->status);
+
+        $job = $this->queueManager->connection('database')->pop();
+        $job->fire();
+        $job->delete();
+
+        $event->refresh();
+        $this->assertSame(WebhookEvent::STATUS_INVALID, $event->status);
+        $this->assertArrayHasKey('data.order.customer.email', $event->validation_errors);
+        $this->assertDatabaseCount('jobs', 0);
     }
 
     public function test_accepts_delivered_and_unknown_event_types(): void
@@ -63,8 +179,18 @@ class MarketplaceWebhookTest extends TestCase
         $this->sendWebhook(json_encode($event))->assertOk();
 
         $event['type'] = 'order.future-event';
+        $event['id'] = 'evt_future_event';
         $event['data']['order'] = (object) ['future_field' => true];
-        $this->sendWebhook(json_encode($event))->assertOk();
+        $event['extra'] = ['preserved' => true];
+        $body = json_encode($event);
+        $this->sendWebhook($body)->assertOk();
+
+        $this->assertDatabaseHas('webhook_events', [
+            'event_id' => $event['id'],
+            'type' => 'order.future-event',
+            'raw_body' => $body,
+            'status' => WebhookEvent::STATUS_PENDING,
+        ]);
     }
 
     public function test_accepts_the_documented_signature_vector(): void
@@ -98,6 +224,7 @@ class MarketplaceWebhookTest extends TestCase
     public function test_rejects_invalid_headers(string $header, string $value, int $status): void
     {
         $this->sendWebhook(json_encode($this->event()), [$header => $value])->assertStatus($status);
+        $this->assertDatabaseCount('webhook_events', 0);
     }
 
     public function test_checks_timestamp_window_in_both_directions(): void
@@ -150,6 +277,7 @@ class MarketplaceWebhookTest extends TestCase
     public function test_rejects_invalid_json_or_event_body(string $body, int $status): void
     {
         $this->sendWebhook($body)->assertStatus($status);
+        $this->assertDatabaseCount('webhook_events', 0);
     }
 
     public static function invalidFields(): array
@@ -171,6 +299,7 @@ class MarketplaceWebhookTest extends TestCase
         data_set($event, $field, $value);
 
         $this->sendWebhook(json_encode($event))->assertUnprocessable()->assertJsonValidationErrors($field);
+        $this->assertDatabaseCount('webhook_events', 0);
         Queue::assertNothingPushed();
     }
 
